@@ -27,7 +27,10 @@
 import shutil
 import tempfile
 import unittest
-from mock import MagicMock, patch
+try:
+    from mock import MagicMock, patch
+except ImportError:
+    from unittest.mock import MagicMock, patch
 
 import openidc_client as openidcclient
 

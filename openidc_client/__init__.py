@@ -284,7 +284,7 @@ class OpenIDCClient(object):
         
         :param token: Dict of the token to be added to the cache
         """
-        uuid = uuidgen().get_hex()
+        uuid = uuidgen().hex
         self.debug('Adding token %s to cache', uuid)
         with self._cache_lock:
             self.__refresh_cache()
