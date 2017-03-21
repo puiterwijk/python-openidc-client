@@ -110,7 +110,7 @@ class OpenIdBaseClientTest(unittest.TestCase):
                 result = self.client._get_new_token(
                     ['test_get_new_token_cancel'])
                 self.assertEqual(result, None)
-                gsmock.assert_called_once()
+                assert gsmock.call_count == 1
                 postmock.assert_not_called()
 
     def test_get_new_token_error(self):
@@ -126,7 +126,7 @@ class OpenIdBaseClientTest(unittest.TestCase):
                 result = self.client._get_new_token(
                     ['test_get_new_token_error'])
                 self.assertEqual(result, None)
-                gsm.assert_called_once()
+                assert gsm.call_count == 1
                 postmock.assert_called_once_with(
                     'POST',
                     'https://idp/Token',
@@ -151,7 +151,7 @@ class OpenIdBaseClientTest(unittest.TestCase):
                 result = self.client._get_new_token(
                     ['test_get_new_token_working'])
                 self.assertNotEqual(result, None)
-                gsm.assert_called_once()
+                assert gsm.call_count == 1
                 postmock.assert_called_once_with(
                     'POST',
                     'https://idp/Token',
@@ -182,7 +182,7 @@ class OpenIdBaseClientTest(unittest.TestCase):
                 result = self.client._get_new_token(
                     ['test_get_token_from_cache'])
                 self.assertNotEqual(result, None)
-                gsm.assert_called_once()
+                assert gsm.call_count == 1
                 postmock.assert_called_once_with(
                     'POST',
                     'https://idp/Token',
@@ -213,7 +213,7 @@ class OpenIdBaseClientTest(unittest.TestCase):
                     self.client.get_token(['test_get_token_new'],
                                           new_token=True),
                     None)
-                gsm.assert_called_once()
+                assert gsm.call_count == 1
                 postmock.assert_called_once_with(
                     'POST',
                     'https://idp/Token',
@@ -244,7 +244,7 @@ class OpenIdBaseClientTest(unittest.TestCase):
                         ['test_report_token_issue_refreshable'],
                         new_token=True),
                     None)
-                gsm.assert_called_once()
+                assert gsm.call_count == 1
                 postmock.assert_called_with(
                     'POST',
                     'https://idp/Token',
@@ -283,7 +283,7 @@ class OpenIdBaseClientTest(unittest.TestCase):
                         ['test_report_token_issue_revoked'],
                         new_token=True),
                     None)
-                gsm.assert_called_once()
+                assert gsm.call_count == 1
                 postmock.assert_called_with(
                     'POST',
                     'https://idp/Token',
@@ -321,7 +321,7 @@ class OpenIdBaseClientTest(unittest.TestCase):
                 result = self.client.send_request(
                     'http://app/test',
                     scopes=['test_send_request_valid_token'])
-                gsm.assert_called_once()
+                assert gsm.call_count == 1
                 self.assertEqual(result.json(), {})
                 postmock.assert_called_with(
                     'POST',
@@ -346,7 +346,7 @@ class OpenIdBaseClientTest(unittest.TestCase):
                 result = self.client.send_request(
                     'http://app/test',
                     scopes=['test_send_request_not_valid_token_500'])
-                gsm.assert_called_once()
+                assert gsm.call_count == 1
                 self.assertEqual(result.status_code, 500)
                 self.assertEqual(result.json(), {})
                 postmock.assert_called_with(
@@ -372,7 +372,7 @@ class OpenIdBaseClientTest(unittest.TestCase):
                 result = self.client.send_request(
                     'http://app/test',
                     scopes=['test_send_request_not_valid_token_403'])
-                gsm.assert_called_once()
+                assert gsm.call_count == 1
                 self.assertEqual(result.status_code, 403)
                 self.assertEqual(result.json(), {})
                 postmock.assert_called_with(
@@ -405,7 +405,7 @@ class OpenIdBaseClientTest(unittest.TestCase):
                     scopes=['test_send_request_not_valid_token_401_' +
                             'refreshable'],
                     json={'foo': 'bar'})
-                gsm.assert_called_once()
+                assert gsm.call_count == 1
                 self.assertEqual(result.json(), {})
                 postmock.assert_called_with(
                     'POST',
@@ -434,7 +434,7 @@ class OpenIdBaseClientTest(unittest.TestCase):
                     'http://app/test',
                     scopes=['test_send_request_not_valid_token_401_not_' +
                             'refreshable'])
-                gsm.assert_called_once()
+                assert gsm.call_count == 1
                 self.assertEqual(result.status_code, 401)
                 self.assertEqual(result.json(), {})
                 # Make sure that if there was an error, the token is cleared
