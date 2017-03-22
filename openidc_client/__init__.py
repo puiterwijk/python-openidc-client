@@ -371,13 +371,16 @@ class OpenIDCClient(object):
         """
         oldtoken = self._cache[uuid]
         self.debug('Refreshing token %s', uuid)
+        data = {'client_id': self.client_id,
+                'grant_type': 'refresh_token',
+                'refresh_token': oldtoken['refresh_token']}
+        if self.client_secret:
+            data['client_secret'] = self.client_secret
+
         resp = requests.request(
             'POST',
             self._idp_url('Token'),
-            data={'client_id': self.client_id,
-                  'client_secret': self.client_secret,
-                  'grant_type': 'refresh_token',
-                  'refresh_token': oldtoken['refresh_token']})
+            data=data)
         resp.raise_for_status()
         resp = resp.json()
         if 'error' in resp:
@@ -459,14 +462,17 @@ class OpenIDCClient(object):
             return None
 
         self.debug('We got an authorization code!')
+        data = {'client_id': self.client_id,
+                'grant_type': 'authorization_code',
+                'redirect_uri': return_uri,
+                'code': self._retrieved_code}
+        if self.client_secret:
+            data['client_secret'] = self.client_secret
+
         resp = requests.request(
             'POST',
             self._idp_url('Token'),
-            data={'client_id': self.client_id,
-                  'client_secret': self.client_secret,
-                  'grant_type': 'authorization_code',
-                  'redirect_uri': return_uri,
-                  'code': self._retrieved_code})
+            data=data)
         resp.raise_for_status()
         self._retrieved_code = None
         resp = resp.json()
