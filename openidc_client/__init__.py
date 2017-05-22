@@ -190,12 +190,14 @@ class OpenIDCClient(object):
         :kwarg auto_refresh: If False, will not try to automatically report
             token issues on 401. This helps with broken apps that may send a
             401 return code in incorrect cases.
+        :kwargs http_method: The HTTP method to use, defaults to POST..
         """
         ckwargs = copy(kwargs)
 
         scopes = ckwargs.pop('scopes')
         new_token = ckwargs.pop('new_token', True)
         auto_refresh = ckwargs.pop('auto_refresh', True)
+        method = ckwargs.pop('http_method', 'POST')
 
         is_retry = False
         if self.token_to_try:
@@ -210,6 +212,9 @@ class OpenIDCClient(object):
         if self.use_post:
             if 'json' in ckwargs:
                 raise ValueError('Cannot provide json in a post call')
+            if method not in ['POST']:
+                raise ValueError('Cannot use POST tokens in %s method' %
+                                 method)
 
             if 'data' not in ckwargs:
                 ckwargs['data'] = {}
@@ -219,7 +224,7 @@ class OpenIDCClient(object):
                 ckwargs['headers'] = {}
             ckwargs['headers']['Authorization'] = 'Bearer %s' % token
 
-        resp = requests.request('POST', *args, **ckwargs)
+        resp = requests.request(method, *args, **ckwargs)
         if resp.status_code == 401 and not is_retry:
             if not auto_refresh:
                 return resp
@@ -246,7 +251,7 @@ class OpenIDCClient(object):
 
     def __refresh_cache(self):
         """Refreshes the self._cache from the cache on disk.
-        
+
         Requires cache_lock to be held by caller."""
         assert self._cache_lock.locked()
         self.debug('Refreshing cache')
@@ -281,7 +286,7 @@ class OpenIDCClient(object):
         """Adds a token to the cache and writes cache to disk.
 
         cache_lock may not be held by anyone.
-        
+
         :param token: Dict of the token to be added to the cache
         """
         uuid = uuidgen().hex
@@ -296,7 +301,7 @@ class OpenIDCClient(object):
         """Removes a token from the cache and writes cache to disk.
 
         cache_lock may not be held by anyone.
-        
+
         :param uuid: UUID of the token to be removed from cache
         """
         self.debug('Removing token %s from cache', uuid)

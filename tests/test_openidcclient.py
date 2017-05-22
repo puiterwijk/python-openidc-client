@@ -328,6 +328,32 @@ class OpenIdBaseClientTest(unittest.TestCase):
                     'http://app/test',
                     headers={'Authorization': 'Bearer testtoken'})
 
+    def test_send_request_valid_token_PATH(self):
+        """Test that we send the token with a PATCH request."""
+        postresp = {'https://idp/Token': [
+                    {'access_token': 'testtoken',
+                     'refresh_token': 'refreshtoken',
+                     'expires_in': 600,
+                     'token_type': 'Bearer'}],
+                    'http://app/test': [
+                     {}
+                    ]}
+
+        with patch.object(self.client, '_get_server',
+                          side_effect=set_token(self.client, 'authz')) as gsm:
+            with patch.object(openidcclient.requests, 'request',
+                              side_effect=mock_request(postresp)) as postmock:
+                result = self.client.send_request(
+                    'http://app/test',
+                    scopes=['test_send_request_valid_token'],
+                    http_method='PATCH')
+                assert gsm.call_count == 1
+                self.assertEqual(result.json(), {})
+                postmock.assert_called_with(
+                    'PATCH',
+                    'http://app/test',
+                    headers={'Authorization': 'Bearer testtoken'})
+
     def test_send_request_not_valid_token_500(self):
         """Test that we don't refresh if we get a server error."""
         postresp = {'https://idp/Token': [
