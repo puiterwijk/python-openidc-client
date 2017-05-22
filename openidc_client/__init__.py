@@ -297,6 +297,24 @@ class OpenIDCClient(object):
             self.__write_cache()
         return uuid
 
+    def _update_token(self, uuid, toupdate):
+        """Updates a token in the cache.
+
+        cache_lock may not be held by anyone.
+
+        :param token: UUID of the token to be updated
+        :param toupdate: Dict indicating which fields need to be updated
+        """
+        self.debug('Updating token %s in cache, fields %s',
+                   uuid, toupdate.keys())
+        with self._cache_lock:
+            self.__refresh_cache()
+            if uuid not in self._cache:
+                return None
+            self._cache[uuid].update(toupdate)
+            self.__write_cache()
+        return uuid
+
     def _delete_token(self, uuid):
         """Removes a token from the cache and writes cache to disk.
 
@@ -391,10 +409,12 @@ class OpenIDCClient(object):
         if 'error' in resp:
             self.debug('Unable to refresh, error: %s', resp['error'])
             return False
-        self._cache[uuid]['access_token'] = resp['access_token']
-        self._cache[uuid]['token_type'] = resp['token_type']
-        self._cache[uuid]['refresh_token'] = resp['refresh_token']
-        self._cache[uuid]['expires_at'] = time.time() + resp['expires_in']
+        self._update_token(
+            uuid,
+            {'access_token': resp['access_token'],
+             'token_type': resp['token_type'],
+             'refresh_token': resp['refresh_token'],
+             'expires_at': time.time() + resp['expires_in']})
         self.debug('Refreshed until %s', self._cache[uuid]['expires_at'])
         return True
 

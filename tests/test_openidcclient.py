@@ -419,6 +419,7 @@ class OpenIdBaseClientTest(unittest.TestCase):
                      'token_type': 'Bearer'}],
                     'http://app/test': [
                      {'_code': 401},
+                     {},
                      {}
                     ]}
 
@@ -432,6 +433,19 @@ class OpenIdBaseClientTest(unittest.TestCase):
                             'refreshable'],
                     json={'foo': 'bar'})
                 assert gsm.call_count == 1
+                self.assertEqual(result.json(), {})
+                postmock.assert_called_with(
+                    'POST',
+                    'http://app/test',
+                    json={'foo': 'bar'},
+                    headers={'Authorization': 'Bearer refreshedtoken'})
+                postmock.reset_mock()
+                self.client._refresh_cache()
+                result = self.client.send_request(
+                    'http://app/test',
+                    scopes=['test_send_request_not_valid_token_401_' +
+                            'refreshable'],
+                    json={'foo': 'bar'})
                 self.assertEqual(result.json(), {})
                 postmock.assert_called_with(
                     'POST',
