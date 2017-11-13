@@ -27,9 +27,10 @@ import requests
 
 
 class OpenIDCClientAuther(requests.auth.AuthBase):
-    def __init__(self, oidcclient, scopes):
+    def __init__(self, oidcclient, scopes, new_token=True):
         self.client = oidcclient
         self.scopes = scopes
+        self.new_token = new_token
 
     def handle_response(self, response, **kwargs):
         if response.status_code in [401, 403]:
@@ -51,5 +52,9 @@ class OpenIDCClientAuther(requests.auth.AuthBase):
 
     def __call__(self, request):
         request.register_hook('response', self.handle_response)
-        request.headers['Authorization'] = 'Bearer %s' % self.client.get_token(self.scopes)
+        token = self.client.get_token(self.scopes,
+                                      new_token=self.new_token)
+        if token is None:
+            raise RuntimeError('No token received')
+        request.headers['Authorization'] = 'Bearer %s' % token
         return request
