@@ -456,10 +456,8 @@ class OpenIDCClient(object):
                 self._retrieved_code = kv['code']
 
             # Just return a message
-            out = StringIO()
-            out.write('You can close this window and return to the CLI')
             start_response('200 OK', [('Content-Type', 'text/plain')])
-            return [out.getvalue()]
+            return [u'You can close this window and return to the CLI'.encode('ascii')]
 
         self._retrieved_code = None
         server = self._get_server(_token_app)
