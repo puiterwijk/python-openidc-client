@@ -23,6 +23,8 @@
 
 """Client for applications relying on OpenID Connect for authentication."""
 
+from __future__ import print_function
+
 from copy import copy
 import json
 import logging
