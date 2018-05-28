@@ -43,6 +43,7 @@ import webbrowser
 from wsgiref import simple_server
 
 import requests
+import sys
 
 from openidc_client import release
 
@@ -68,7 +69,7 @@ class OpenIDCClient(object):
     #   scopes: A list of scopes that we had requested with the token
     def __init__(self, app_identifier, id_provider, id_provider_mapping,
                  client_id, client_secret=None, use_post=False, useragent=None,
-                 cachedir=None):
+                 cachedir=None, printfd=sys.stdout):
         """Client for interacting with web services relying on OpenID Connect.
 
         :param app_identifier: Identifier for storage of retrieved tokens
@@ -85,6 +86,7 @@ class OpenIDCClient(object):
         :kwarg cachedir: The directory in which to store the token caches. Will
             be put through expanduer. Default is ~/.openidc. If this does not
             exist and we are unable to create it, the OSError will be thrown.
+        :kwargs printfd: The File object to print token instructions to.
         """
         self.logger = logging.getLogger(__name__)
         self.debug = self.logger.debug
@@ -108,6 +110,7 @@ class OpenIDCClient(object):
         with self._cache_lock:
             self.__refresh_cache()
         self._valid_cache = []
+        self._printfd = printfd
 
     def get_token(self, scopes, new_token=True):
         """Function to retrieve tokens with specific scopes.
@@ -472,7 +475,8 @@ class OpenIDCClient(object):
         rquery['response_mode'] = 'query'
         query = urlencode(rquery)
         authz_url = '%s?%s' % (self._idp_url('Authorization'), query)
-        print('Please visit %s to grant authorization' % authz_url)
+        print('Please visit %s to grant authorization' % authz_url,
+              file=self._printfd)
         webbrowser.open(authz_url)
         server.handle_request()
         server.server_close()
