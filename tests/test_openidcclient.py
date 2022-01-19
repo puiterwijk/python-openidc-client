@@ -24,8 +24,11 @@
 """ Test the OpenIDCClient. """
 
 
+from base64 import urlsafe_b64encode
+from hashlib import sha256
 import shutil
 import tempfile
+import urllib.parse
 import unittest
 try:
     from mock import MagicMock, patch
@@ -160,6 +163,51 @@ class OpenIdBaseClientTest(unittest.TestCase):
                           'grant_type': 'authorization_code',
                           'client_id': 'testclient',
                           'redirect_uri': 'http://localhost:1/'})
+
+    def test_get_new_token_pkce_working(self):
+        """Test for a completely succesful case with PKCE."""
+        postresp = {'https://idp/Token': [
+                    {'access_token': 'testtoken',
+                     'refresh_token': 'refreshtoken',
+                     'expires_in': 600,
+                     'token_type': 'Bearer'}]}
+
+        with patch.object(self.client, '_get_server',
+                          side_effect=set_token(self.client, 'authz')) as gsm:
+            with patch.object(openidcclient.requests, 'request',
+                              side_effect=mock_request(postresp)) as postmock:
+                with patch.object(openidcclient.webbrowser, 'open') as wb:
+                    self.client._use_pkce = True
+                    result = self.client._get_new_token(
+                        ['test_get_new_token_pkce_working'])
+                    self.client._use_pkce = False
+                    self.assertNotEqual(result, None)
+                    assert gsm.call_count == 1
+
+                    # Check that the PKCE code was sent to the browser
+                    (wbargs, _) = wb.call_args
+                    auth_url = urllib.parse.urlparse(wbargs[0])
+                    auth_params = urllib.parse.parse_qs(auth_url.query)
+                    assert auth_params['code_challenge_method'] == ['S256']
+                    assert 'code_challenge' in auth_params
+                    code_challenge = auth_params['code_challenge'][0]
+
+                    (args, kwargs) = postmock.call_args
+                    assert args[0] == "POST"
+                    assert args[1] == "https://idp/Token"
+                    assert kwargs['data']['code'] == 'authz'
+                    assert kwargs['data']['client_id'] == 'testclient'
+                    assert kwargs['data']['client_secret'] == 'notsecret'
+                    assert kwargs['data']['grant_type'] == 'authorization_code'
+                    assert kwargs['data']['redirect_uri'] == 'http://localhost:1/'
+                    code_verifier = kwargs['data']['code_verifier']
+                    assert len(code_verifier) >= 43
+                    assert len(code_verifier) <= 128
+
+                    correct_challenge = urlsafe_b64encode(sha256(code_verifier.encode()).digest())
+                    correct_challenge = correct_challenge.decode().rstrip('=')
+
+                    assert correct_challenge == code_challenge
 
     def test_get_token_no_new(self):
         """Test that if we don't have a token we can skip getting a new oen."""

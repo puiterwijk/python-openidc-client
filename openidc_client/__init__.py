@@ -25,7 +25,9 @@
 
 from __future__ import print_function
 
+from base64 import urlsafe_b64encode
 from copy import copy
+from hashlib import sha256
 import json
 import logging
 from threading import Lock
@@ -34,6 +36,7 @@ try:
     from StringIO import StringIO
 except ImportError:
     from io import StringIO
+import secrets
 import socket
 import os
 try:
@@ -51,6 +54,8 @@ from openidc_client import release
 
 # The ports that we will try to use for our webserver
 WEB_PORTS = [12345, 23456]
+# Length of the PKCE code verifier
+PKCE_CODE_VERIFIER_LENGTH = 64
 
 
 class OpenIDCClient(object):
@@ -71,7 +76,7 @@ class OpenIDCClient(object):
     #   scopes: A list of scopes that we had requested with the token
     def __init__(self, app_identifier, id_provider, id_provider_mapping,
                  client_id, client_secret=None, use_post=False, useragent=None,
-                 cachedir=None, printfd=sys.stdout):
+                 cachedir=None, printfd=sys.stdout, use_pkce=False):
         """Client for interacting with web services relying on OpenID Connect.
 
         :param app_identifier: Identifier for storage of retrieved tokens
@@ -89,6 +94,7 @@ class OpenIDCClient(object):
             be put through expanduer. Default is ~/.openidc. If this does not
             exist and we are unable to create it, the OSError will be thrown.
         :kwargs printfd: The File object to print token instructions to.
+        :kwargs use_pkce: Whether to use PKCE for token requests.
         """
         self.logger = logging.getLogger(__name__)
         self.debug = self.logger.debug
@@ -113,6 +119,7 @@ class OpenIDCClient(object):
             self.__refresh_cache()
         self._valid_cache = []
         self._printfd = printfd
+        self._use_pkce = use_pkce
 
     def get_token(self, scopes, new_token=True):
         """Function to retrieve tokens with specific scopes.
@@ -475,6 +482,15 @@ class OpenIDCClient(object):
         rquery['client_id'] = self.client_id
         rquery['redirect_uri'] = return_uri
         rquery['response_mode'] = 'query'
+
+        if self._use_pkce:
+            code_verifier = secrets.token_urlsafe(PKCE_CODE_VERIFIER_LENGTH)
+            code_challenge = urlsafe_b64encode(
+                sha256(code_verifier.encode('utf-8')).digest()
+            )
+            rquery['code_challenge'] = code_challenge.decode('utf-8').rstrip('=')
+            rquery['code_challenge_method'] = 'S256'
+
         query = urlencode(rquery)
         authz_url = '%s?%s' % (self._idp_url('Authorization'), query)
         print('Please visit %s to grant authorization' % authz_url,
@@ -497,6 +513,8 @@ class OpenIDCClient(object):
                 'code': self._retrieved_code}
         if self.client_secret:
             data['client_secret'] = self.client_secret
+        if self._use_pkce:
+            data['code_verifier'] = code_verifier
 
         resp = requests.request(
             'POST',
