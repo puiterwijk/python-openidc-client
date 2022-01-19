@@ -351,6 +351,38 @@ class OpenIdBaseClientTest(unittest.TestCase):
                           'grant_type': 'refresh_token',
                           'refresh_token': 'refreshtoken'})
 
+    def test_report_token_issue_no_refresh(self):
+        """Test that we don't try to refresh if there's no refresh token."""
+        postresp = {'https://idp/Token': [
+                    {'access_token': 'testtoken',
+                     'expires_in': 600,
+                     'token_type': 'Bearer'},
+                    {'error': 'invalid_token',
+                     'error_description': 'This token is not valid'}]}
+
+        with patch.object(self.client, '_get_server',
+                          side_effect=set_token(self.client, 'authz')) as gsm:
+            with patch.object(openidcclient.requests, 'request',
+                              side_effect=mock_request(postresp)) as postmock:
+                self.assertNotEqual(
+                    self.client.get_token(
+                        ['test_report_token_issue_rno_refresh'],
+                        new_token=True),
+                    None)
+                assert gsm.call_count == 1
+                postmock.assert_called_with(
+                    'POST',
+                    'https://idp/Token',
+                    data={'code': 'authz',
+                          'client_secret': 'notsecret',
+                          'grant_type': 'authorization_code',
+                          'client_id': 'testclient',
+                          'redirect_uri': 'http://localhost:1/'})
+                postmock.reset_mock()
+                self.assertEqual(self.client.report_token_issue(),
+                                 None)
+                postmock.assert_not_called()
+
     def test_send_request_valid_token(self):
         """Test that we send the token."""
         postresp = {'https://idp/Token': [
