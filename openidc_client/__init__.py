@@ -405,6 +405,9 @@ class OpenIDCClient(object):
         :returns: True if the token was succesfully refreshed, False otherwise
         """
         oldtoken = self._cache[uuid]
+        if not oldtoken['refresh_token']:
+            self.debug("Unable to refresh: no refresh token present")
+            return False
         self.debug('Refreshing token %s', uuid)
         data = {'client_id': self.client_id,
                 'grant_type': 'refresh_token',
@@ -528,7 +531,7 @@ class OpenIDCClient(object):
                        resp['error'])
             return None
         token = {'access_token': resp['access_token'],
-                 'refresh_token': resp['refresh_token'],
+                 'refresh_token': resp.get('refresh_token'),
                  'expires_at': time.time() + int(resp['expires_in']),
                  'idp': self.idp,
                  'token_type': resp['token_type'],
