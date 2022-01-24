@@ -23,6 +23,7 @@
 
 """Python-Requests AuthBase wrapping OpenIDCClient."""
 
+import httpx
 import requests
 
 
@@ -37,7 +38,7 @@ class OpenIDCClientAuther(requests.auth.AuthBase):
             new_token = self.client.report_token_issue()
             if not new_token:
                 return response
-            response.request.headers['Authorization'] = 'Bearer %s' % new_token
+            response.request.headers["Authorization"] = "Bearer %s" % new_token
 
             # Consume the content so we can reuse the connection
             response.content
@@ -51,10 +52,47 @@ class OpenIDCClientAuther(requests.auth.AuthBase):
             return response
 
     def __call__(self, request):
-        request.register_hook('response', self.handle_response)
-        token = self.client.get_token(self.scopes,
-                                      new_token=self.new_token)
+        request.register_hook("response", self.handle_response)
+        token = self.client.get_token(self.scopes, new_token=self.new_token)
         if token is None:
-            raise RuntimeError('No token received')
-        request.headers['Authorization'] = 'Bearer %s' % token
+            raise RuntimeError("No token received")
+        request.headers["Authorization"] = "Bearer %s" % token
         return request
+
+
+class OpenIDCClientAutherHttpx(httpx.Auth):
+    def __init__(self, oidcclient, scopes, new_token=True):
+        self.client = oidcclient
+        self.scopes = scopes
+        self.new_token = new_token
+
+    def handle_response(self, response, **kwargs):
+        if response.status_code in [401, 403]:
+            new_token = self.client.report_token_issue()
+            if not new_token:
+                return response
+            response.request.headers["Authorization"] = "Bearer %s" % new_token
+
+            # Consume the content so we can reuse the connection
+            response.content
+            response.raw.release_conn()
+
+            r = response.connection.send(response.request)
+            r.history.append(response)
+
+            return r
+        else:
+            return response
+
+    def auth_flow(self, request):
+        token = self.client.get_token(self.scopes, new_token=self.new_token)
+        if token is None:
+            raise RuntimeError("No token received")
+        request.headers["Authorization"] = "Bearer %s" % token
+        response = yield request
+        if response.status_code in [401, 403]:
+            new_token = self.client.report_token_issue()
+            if not new_token:
+                return response
+            response.request.headers["Authorization"] = "Bearer %s" % new_token
+            yield response.request
