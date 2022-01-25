@@ -32,6 +32,7 @@ import json
 import logging
 from threading import Lock
 import time
+
 try:
     from StringIO import StringIO
 except ImportError:
@@ -39,6 +40,7 @@ except ImportError:
 import secrets
 import socket
 import os
+
 try:
     from urllib import urlencode
 except ImportError:
@@ -47,7 +49,7 @@ from uuid import uuid4 as uuidgen
 import webbrowser
 from wsgiref import simple_server
 
-import requests
+import httpx
 import sys
 
 from openidc_client import release
@@ -74,9 +76,19 @@ class OpenIDCClient(object):
     #    refresh the token.
     #   refresh_token: The token we can use to refresh the access token
     #   scopes: A list of scopes that we had requested with the token
-    def __init__(self, app_identifier, id_provider, id_provider_mapping,
-                 client_id, client_secret=None, use_post=False, useragent=None,
-                 cachedir=None, printfd=sys.stdout, use_pkce=False):
+    def __init__(
+        self,
+        app_identifier,
+        id_provider,
+        id_provider_mapping,
+        client_id,
+        client_secret=None,
+        use_post=False,
+        useragent=None,
+        cachedir=None,
+        printfd=sys.stdout,
+        use_pkce=False,
+    ):
         """Client for interacting with web services relying on OpenID Connect.
 
         :param app_identifier: Identifier for storage of retrieved tokens
@@ -105,9 +117,8 @@ class OpenIDCClient(object):
         self.idp_mapping = id_provider_mapping
         self.client_id = client_id
         self.client_secret = client_secret
-        self.useragent = useragent or 'python-openid-client/%s' % \
-            release.VERSION
-        self.cachedir = os.path.expanduser(cachedir or '~/.openidc')
+        self.useragent = useragent or "python-openid-client/%s" % release.VERSION
+        self.cachedir = os.path.expanduser(cachedir or "~/.openidc")
         self.last_returned_uuid = None
         self.problem_reported = False
         self.token_to_try = None
@@ -142,13 +153,13 @@ class OpenIDCClient(object):
         :returns: String bearer token if possible or None
         """
         if not isinstance(scopes, list):
-            raise ValueError('Scopes must be a list')
+            raise ValueError("Scopes must be a list")
         token = self._get_token_with_scopes(scopes)
         if token:
             # If we had a valid token, use that
             self.last_returned_uuid = token[0]
             self.problem_reported = False
-            return token[1]['access_token']
+            return token[1]["access_token"]
         elif not new_token:
             return None
 
@@ -157,7 +168,7 @@ class OpenIDCClient(object):
         if uuid:
             self.last_returned_uuid = uuid
             self.problem_reported = False
-            return self._cache[uuid]['access_token']
+            return self._cache[uuid]["access_token"]
 
     def report_token_issue(self):
         """Report an error with the last token that was returned.
@@ -174,7 +185,7 @@ class OpenIDCClient(object):
         token was lacking specific permissions.
         """
         if not self.last_returned_uuid:
-            raise Exception('Cannot report issue before requesting token')
+            raise Exception("Cannot report issue before requesting token")
         if self.problem_reported:
             # We were reported an issue before. Let's just remove this token.
             self._delete_token(self.last_returned_uuid)
@@ -185,10 +196,10 @@ class OpenIDCClient(object):
             return None
         else:
             self.problem_reported = True
-            return self._cache[self.last_returned_uuid]['access_token']
+            return self._cache[self.last_returned_uuid]["access_token"]
 
     def send_request(self, *args, **kwargs):
-        """Make an python-requests POST request.
+        """Make an httpx POST request.
 
         Allarguments and keyword arguments are like the arguments to requests,
         except for `scopes`, `new_token` and `auto_refresh`  keyword arguments.
@@ -206,10 +217,10 @@ class OpenIDCClient(object):
         """
         ckwargs = copy(kwargs)
 
-        scopes = ckwargs.pop('scopes')
-        new_token = ckwargs.pop('new_token', True)
-        auto_refresh = ckwargs.pop('auto_refresh', True)
-        method = ckwargs.pop('http_method', 'POST')
+        scopes = ckwargs.pop("scopes")
+        new_token = ckwargs.pop("new_token", True)
+        auto_refresh = ckwargs.pop("auto_refresh", True)
+        method = ckwargs.pop("http_method", "POST")
 
         is_retry = False
         if self.token_to_try:
@@ -222,21 +233,20 @@ class OpenIDCClient(object):
                 return None
 
         if self.use_post:
-            if 'json' in ckwargs:
-                raise ValueError('Cannot provide json in a post call')
-            if method not in ['POST']:
-                raise ValueError('Cannot use POST tokens in %s method' %
-                                 method)
+            if "json" in ckwargs:
+                raise ValueError("Cannot provide json in a post call")
+            if method not in ["POST"]:
+                raise ValueError("Cannot use POST tokens in %s method" % method)
 
-            if 'data' not in ckwargs:
-                ckwargs['data'] = {}
-            ckwargs['data']['access_token'] = token
+            if "data" not in ckwargs:
+                ckwargs["data"] = {}
+            ckwargs["data"]["access_token"] = token
         else:
-            if 'headers' not in ckwargs:
-                ckwargs['headers'] = {}
-            ckwargs['headers']['Authorization'] = 'Bearer %s' % token
+            if "headers" not in ckwargs:
+                ckwargs["headers"] = {}
+            ckwargs["headers"]["Authorization"] = "Bearer %s" % token
 
-        resp = requests.request(method, *args, **ckwargs)
+        resp = httpx.request(method, *args, **ckwargs)
         if resp.status_code == 401 and not is_retry:
             if not auto_refresh:
                 return resp
@@ -259,24 +269,24 @@ class OpenIDCClient(object):
         This assures that whenever this file is touched, the cache lock is held
         """
         assert self._cache_lock.locked()
-        return os.path.join(self.cachedir, 'oidc_%s.json' % self.app_id)
+        return os.path.join(self.cachedir, "oidc_%s.json" % self.app_id)
 
     def __refresh_cache(self):
         """Refreshes the self._cache from the cache on disk.
 
         Requires cache_lock to be held by caller."""
         assert self._cache_lock.locked()
-        self.debug('Refreshing cache')
+        self.debug("Refreshing cache")
         if not os.path.isdir(self.cachedir):
-            self.debug('Creating directory')
+            self.debug("Creating directory")
             os.makedirs(self.cachedir)
         if not os.path.exists(self._cachefile):
-            self.debug('Creating file')
-            with open(self._cachefile, 'w') as f:
+            self.debug("Creating file")
+            with open(self._cachefile, "w") as f:
                 f.write(json.dumps({}))
-        with open(self._cachefile, 'r') as f:
+        with open(self._cachefile, "r") as f:
             self._cache = json.loads(f.read())
-        self.debug('Loaded %i tokens', len(self._cache))
+        self.debug("Loaded %i tokens", len(self._cache))
 
     def _refresh_cache(self):
         """Refreshes the self._cache from the cache on disk.
@@ -290,8 +300,8 @@ class OpenIDCClient(object):
 
         Requires cache_lock to be held by caller."""
         assert self._cache_lock.locked()
-        self.debug('Writing cache with %i tokens', len(self._cache))
-        with open(self._cachefile, 'w') as f:
+        self.debug("Writing cache with %i tokens", len(self._cache))
+        with open(self._cachefile, "w") as f:
             f.write(json.dumps(self._cache))
 
     def _add_token(self, token):
@@ -302,7 +312,7 @@ class OpenIDCClient(object):
         :param token: Dict of the token to be added to the cache
         """
         uuid = uuidgen().hex
-        self.debug('Adding token %s to cache', uuid)
+        self.debug("Adding token %s to cache", uuid)
         with self._cache_lock:
             self.__refresh_cache()
             self._cache[uuid] = token
@@ -317,8 +327,7 @@ class OpenIDCClient(object):
         :param token: UUID of the token to be updated
         :param toupdate: Dict indicating which fields need to be updated
         """
-        self.debug('Updating token %s in cache, fields %s',
-                   uuid, toupdate.keys())
+        self.debug("Updating token %s in cache, fields %s", uuid, toupdate.keys())
         with self._cache_lock:
             self.__refresh_cache()
             if uuid not in self._cache:
@@ -334,15 +343,15 @@ class OpenIDCClient(object):
 
         :param uuid: UUID of the token to be removed from cache
         """
-        self.debug('Removing token %s from cache', uuid)
+        self.debug("Removing token %s from cache", uuid)
         with self._cache_lock:
             self.__refresh_cache()
             if uuid in self._cache:
-                self.debug('Removing token')
+                self.debug("Removing token")
                 del self._cache[uuid]
                 self.__write_cache()
             else:
-                self.debug('Token was already gone')
+                self.debug("Token was already gone")
 
     def _get_token_with_scopes(self, scopes):
         """Searches the cache for any tokens that have the requested scopes.
@@ -357,28 +366,30 @@ class OpenIDCClient(object):
             found
         """
         possible_token = None
-        self.debug('Trying to get token with scopes %s', scopes)
+        self.debug("Trying to get token with scopes %s", scopes)
         for uuid in self._cache:
-            self.debug('Checking %s', uuid)
+            self.debug("Checking %s", uuid)
             token = self._cache[uuid]
-            if token['idp'] != self.idp:
-                self.debug('Incorrect idp')
+            if token["idp"] != self.idp:
+                self.debug("Incorrect idp")
                 continue
-            if not set(scopes).issubset(set(token['scopes'])):
-                self.debug('Missing scope: %s not subset of %s',
-                           set(scopes),
-                           set(token['scopes']))
+            if not set(scopes).issubset(set(token["scopes"])):
+                self.debug(
+                    "Missing scope: %s not subset of %s",
+                    set(scopes),
+                    set(token["scopes"]),
+                )
                 continue
-            if token['expires_at'] < time.time():
+            if token["expires_at"] < time.time():
                 # This is a token that's supposed to still be valid, prefer it
                 # over any others we have
-                self.debug('Not yet expired, returning')
+                self.debug("Not yet expired, returning")
                 return uuid, token
             # This is a token that may or may not still be valid
-            self.debug('Possible')
+            self.debug("Possible")
             possible_token = (uuid, token)
         if possible_token:
-            self.debug('Returning possible token')
+            self.debug("Returning possible token")
             return possible_token
 
     def _idp_url(self, method):
@@ -391,8 +402,7 @@ class OpenIDCClient(object):
         if method in self.idp_mapping:
             return self.idp + self.idp_mapping[method]
         else:
-            return ValueError('Idp Mapping did not include path for %s'
-                              % method)
+            return ValueError("Idp Mapping did not include path for %s" % method)
 
     def _refresh_token(self, uuid):
         """Tries to refresh a token and put the refreshed token in self._cache
@@ -405,39 +415,41 @@ class OpenIDCClient(object):
         :returns: True if the token was succesfully refreshed, False otherwise
         """
         oldtoken = self._cache[uuid]
-        if not oldtoken['refresh_token']:
+        if not oldtoken["refresh_token"]:
             self.debug("Unable to refresh: no refresh token present")
             return False
-        self.debug('Refreshing token %s', uuid)
-        data = {'client_id': self.client_id,
-                'grant_type': 'refresh_token',
-                'refresh_token': oldtoken['refresh_token']}
+        self.debug("Refreshing token %s", uuid)
+        data = {
+            "client_id": self.client_id,
+            "grant_type": "refresh_token",
+            "refresh_token": oldtoken["refresh_token"],
+        }
         if self.client_secret:
-            data['client_secret'] = self.client_secret
+            data["client_secret"] = self.client_secret
 
-        resp = requests.request(
-            'POST',
-            self._idp_url('Token'),
-            data=data)
+        resp = httpx.request("POST", self._idp_url("Token"), data=data)
         resp.raise_for_status()
         resp = resp.json()
-        if 'error' in resp:
-            self.debug('Unable to refresh, error: %s', resp['error'])
+        if "error" in resp:
+            self.debug("Unable to refresh, error: %s", resp["error"])
             return False
         self._update_token(
             uuid,
-            {'access_token': resp['access_token'],
-             'token_type': resp['token_type'],
-             'refresh_token': resp['refresh_token'],
-             'expires_at': time.time() + resp['expires_in']})
-        self.debug('Refreshed until %s', self._cache[uuid]['expires_at'])
+            {
+                "access_token": resp["access_token"],
+                "token_type": resp["token_type"],
+                "refresh_token": resp["refresh_token"],
+                "expires_at": time.time() + resp["expires_in"],
+            },
+        )
+        self.debug("Refreshed until %s", self._cache[uuid]["expires_at"])
         return True
 
     def _get_server(self, app):
         """This function returns a SimpleServer with an available WEB_PORT."""
         for port in WEB_PORTS:
             try:
-                server = simple_server.make_server('0.0.0.0', port, app)
+                server = simple_server.make_server("0.0.0.0", port, app)
                 return server
             except socket.error:
                 # This port did not work. Switch to next one
@@ -458,46 +470,49 @@ class OpenIDCClient(object):
         the valid cache, and then return the UUID.
         If the user cancelled (or we got another error), we will return None.
         """
-        def _token_app(environ, start_response):
-            query = environ['QUERY_STRING']
-            split = query.split('&')
-            kv = dict([v.split('=', 1) for v in split])
 
-            if 'error' in kv:
-                self.debug('Error code returned: %s (%s)',
-                           kv['error'], kv.get('error_description'))
+        def _token_app(environ, start_response):
+            query = environ["QUERY_STRING"]
+            split = query.split("&")
+            kv = dict([v.split("=", 1) for v in split])
+
+            if "error" in kv:
+                self.debug(
+                    "Error code returned: %s (%s)",
+                    kv["error"],
+                    kv.get("error_description"),
+                )
                 self._retrieved_code = False
             else:
-                self._retrieved_code = kv['code']
+                self._retrieved_code = kv["code"]
 
             # Just return a message
-            start_response('200 OK', [('Content-Type', 'text/plain')])
-            return [u'You can close this window and return to the CLI'.encode('ascii')]
+            start_response("200 OK", [("Content-Type", "text/plain")])
+            return [u"You can close this window and return to the CLI".encode("ascii")]
 
         self._retrieved_code = None
         server = self._get_server(_token_app)
         if not server:
-            raise Exception('We were unable to instantiate a webserver')
-        return_uri = 'http://localhost:%i/' % server.socket.getsockname()[1]
+            raise Exception("We were unable to instantiate a webserver")
+        return_uri = "http://localhost:%i/" % server.socket.getsockname()[1]
         rquery = {}
-        rquery['scope'] = ' '.join(scopes)
-        rquery['response_type'] = 'code'
-        rquery['client_id'] = self.client_id
-        rquery['redirect_uri'] = return_uri
-        rquery['response_mode'] = 'query'
+        rquery["scope"] = " ".join(scopes)
+        rquery["response_type"] = "code"
+        rquery["client_id"] = self.client_id
+        rquery["redirect_uri"] = return_uri
+        rquery["response_mode"] = "query"
 
         if self._use_pkce:
             code_verifier = secrets.token_urlsafe(PKCE_CODE_VERIFIER_LENGTH)
             code_challenge = urlsafe_b64encode(
-                sha256(code_verifier.encode('utf-8')).digest()
+                sha256(code_verifier.encode("utf-8")).digest()
             )
-            rquery['code_challenge'] = code_challenge.decode('utf-8').rstrip('=')
-            rquery['code_challenge_method'] = 'S256'
+            rquery["code_challenge"] = code_challenge.decode("utf-8").rstrip("=")
+            rquery["code_challenge_method"] = "S256"
 
         query = urlencode(rquery)
-        authz_url = '%s?%s' % (self._idp_url('Authorization'), query)
-        print('Please visit %s to grant authorization' % authz_url,
-              file=self._printfd)
+        authz_url = "%s?%s" % (self._idp_url("Authorization"), query)
+        print("Please visit %s to grant authorization" % authz_url, file=self._printfd)
         webbrowser.open(authz_url)
         server.handle_request()
         server.server_close()
@@ -506,35 +521,35 @@ class OpenIDCClient(object):
         if self._retrieved_code is False:
             # The user cancelled the request
             self._retrieved_code = None
-            self.debug('User cancelled')
+            self.debug("User cancelled")
             return None
 
-        self.debug('We got an authorization code!')
-        data = {'client_id': self.client_id,
-                'grant_type': 'authorization_code',
-                'redirect_uri': return_uri,
-                'code': self._retrieved_code}
+        self.debug("We got an authorization code!")
+        data = {
+            "client_id": self.client_id,
+            "grant_type": "authorization_code",
+            "redirect_uri": return_uri,
+            "code": self._retrieved_code,
+        }
         if self.client_secret:
-            data['client_secret'] = self.client_secret
+            data["client_secret"] = self.client_secret
         if self._use_pkce:
-            data['code_verifier'] = code_verifier
+            data["code_verifier"] = code_verifier
 
-        resp = requests.request(
-            'POST',
-            self._idp_url('Token'),
-            data=data)
+        resp = httpx.request("POST", self._idp_url("Token"), data=data)
         resp.raise_for_status()
         self._retrieved_code = None
         resp = resp.json()
-        if 'error' in resp:
-            self.debug('Error exchanging authorization code: %s',
-                       resp['error'])
+        if "error" in resp:
+            self.debug("Error exchanging authorization code: %s", resp["error"])
             return None
-        token = {'access_token': resp['access_token'],
-                 'refresh_token': resp.get('refresh_token'),
-                 'expires_at': time.time() + int(resp['expires_in']),
-                 'idp': self.idp,
-                 'token_type': resp['token_type'],
-                 'scopes': scopes}
+        token = {
+            "access_token": resp["access_token"],
+            "refresh_token": resp.get("refresh_token"),
+            "expires_at": time.time() + int(resp["expires_in"]),
+            "idp": self.idp,
+            "token_type": resp["token_type"],
+            "scopes": scopes,
+        }
         # AND WE ARE DONE! \o/
         return self._add_token(token)
